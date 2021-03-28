@@ -10,7 +10,7 @@ router = APIRouter(
 )
 
 
-@router.post('/', status_code=201)
+@router.post('', status_code=201)
 def create_couriers(data: dict, response: Response):  # проще было бы сразу в дата классе request_models.CouriersData
     # указать, что по ключу "data" лежит лист с объектами request_models.Courier, а в параметрах данного роута
     # указать, что тело запроса это request_models.CouriersData, но из-за жестких ограничений на формат выходных
