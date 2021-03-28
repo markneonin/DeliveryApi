@@ -10,7 +10,7 @@ router = APIRouter(
 )
 
 
-@router.post('/', status_code=201)
+@router.post('', status_code=201)
 def create_couriers(data: dict, response: Response):
 
     result = ch.orders_validation(data)
