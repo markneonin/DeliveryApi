@@ -6,6 +6,21 @@ from datetime import datetime
 
 
 def orders_choice(cargo, orders):
+    """
+    Оптимальное заполнение курьера
+
+    Инициализирует глобальные перменные, необходимые для работы process и generate_valid_combination
+    вызывает generate_valid_combination, оптимальная комбинация сохраняется в best_combination или
+    absolutely_best_combination, возвращает список с объектами отобранных заказов
+
+    Parameters:
+    argument1 (int): Грузоподъемность курьера
+    argument2 (list): Лист с объектами заказов
+
+    Returns:
+    list: Лист отобранных заказов
+
+    """
     global quantity_of_orders
     global courier_cargo
     global list_of_orders
@@ -39,6 +54,19 @@ def orders_choice(cargo, orders):
 
 
 def process(combination):
+    """
+    Обработчик комбинации
+
+    Находит общий вес заказов в комбинации, сравнивает с лучшим, если найдена лучшая комбинация
+    перезаписывает лучший результат и комбинацию
+
+    Parameters:
+    argument1 (list): Лист вида [0,1,0,1,0,1...]
+
+    Returns:
+    None
+
+    """
     global best_combination, best_result
     total_weight = 0
     for index in range(len(combination)):
@@ -50,6 +78,21 @@ def process(combination):
 
 
 def generate_valid_combinations(quantity, combination=[], local_sum=0):
+    """
+    Генератор валидных комбинаций
+
+    Рекурсивно генерирует комбинацию 0 (не берем заказ) и 1 (берем заказ) заданной длины, при каждом вызове
+    увеличивает локальную сумму, если очередной заказ был добавлен в комбинацию. Производит сравнение локальной суммы
+    с грузоподъемностью курьера, чтобы не идти по тупиковым веткам
+
+    Parameters:
+    argument1 (int): Количество заказов
+
+    Returns:
+    None
+
+    """
+
     global absolutely_best_combination
 
     if quantity == 0:
@@ -57,8 +100,10 @@ def generate_valid_combinations(quantity, combination=[], local_sum=0):
     else:
         try:  # обернул в трай блок для первого вызова, чтобы не нагружать функцию дополнительной проверкой
             index = global_quantity - quantity
+
             if combination[index] == 1:
                 local_sum += list_of_orders[index].weight
+
             if local_sum < courier_cargo:
                 generate_valid_combinations(quantity - 1, combination + [0], local_sum)
                 generate_valid_combinations(quantity - 1, combination + [1], local_sum)
@@ -71,6 +116,21 @@ def generate_valid_combinations(quantity, combination=[], local_sum=0):
 
 
 def assign(courier_id):
+    """
+    Назначение заказов курьеру
+
+    Проверяет наличие незакрытой доставки у курьера,
+    если таковая есть, вернет время её создания и незакрытые заказы из этой доставки.
+    Если активной доставки нет, попытается найти заказы и если найдёт,
+    по максимуму заполнит курьера ими и создаст доставку и назанчения для отобранных заказов.
+
+    Parameters:
+    argument1 (int): ID курьера
+
+    Returns:
+    response_models.AssignData: Объект готовый к отправке клиенту
+
+    """
     active_delivery = db.find_active_delivery(courier_id)
 
     if not active_delivery:
@@ -80,11 +140,11 @@ def assign(courier_id):
 
         if orders:
             orders = sorted(orders, key=lambda i: i.weight, reverse=True)
-            if len(orders) <= 60:  # при количестве заказов больше 60 время выполнения оптимального алгоритма может
-                # превышать одну секунду
+
+            if len(orders) <= 60:  # если заказов больше 60, время выполнения order_choice может превышать одну секунду
                 assigned_orders = orders_choice(cargo=courier.cargo,
                                                 orders=orders)
-            else:  # поэтому, если их больше 60, используем примитивный алгоритм выборки заказов
+            else:  # поэтому используем примитивный алгоритм выборки заказов для большого количества
                 total_weight = 0
                 assigned_orders = []
                 while total_weight < courier.cargo and orders:
@@ -95,6 +155,7 @@ def assign(courier_id):
 
             delivery = fabrics.create_delivery(courier=courier)
             delivery = db.create_delivery(delivery=delivery)
+
             assignments = []
             ids_for_out = []
 
@@ -135,6 +196,21 @@ def assign(courier_id):
 
 
 def patch_courier(patch_data, courier_id):
+    """
+    Изменение данных курьера
+
+    Меняет параметры курьера в БД, проверяет наличие активной доставки у курьера
+    если таковая имеется отменяет назначения заказов, не подходящих под новые параметры курьера,
+    если в результате отмены в доставке больше нет активных заказов, меняет статус доставки на complete.
+    Возвращает новую информацию о курьере
+
+    Parameters:
+    argument1 (int): ID курьера
+
+    Returns:
+    response_models.Courier: Объект готовый к отправке клиенту
+
+    """
     active_delivery = db.find_active_delivery(courier_id)
 
     if active_delivery:
@@ -167,6 +243,7 @@ def patch_courier(patch_data, courier_id):
                 assigned_orders_ids.append(order.order_id)
 
             canceled_orders_ids = set(active_orders_ids) - set(assigned_orders_ids)
+
             db.orders_status_up(orders_ids=list(canceled_orders_ids),
                                 status_key='order_available')
             db.assign_status_up(orders_ids=list(canceled_orders_ids),
@@ -203,6 +280,20 @@ def patch_courier(patch_data, courier_id):
 
 
 def complete_order(complete_data, delivery):
+    """
+    Завершение заказа
+
+    Апдейтит статус и complete_time заказа в БД. Проверяет был ли он последним в доставке,
+    если да, апдейтит статус доставки
+
+    Parameters:
+    argument1 (request_models.CompleteOrder): Объект полученный от клиента
+    argument2 (tables.Delivery): Объект доставки полученный из БД во время валидации
+
+    Returns:
+    dict: словарь вида - {'order_id': (int)}, готовый к упаковке в json
+
+    """
     db.complete_order(order_id=complete_data.order_id,
                       complete_time=complete_data.complete_time)
 
@@ -215,7 +306,21 @@ def complete_order(complete_data, delivery):
 
 
 def courier_info_full(courier_id):
+    """
+    Полная информация о курьере
+
+    Находит основные параметры курьера, вызывает функции расчета заработка и рейтинга,
+    вызывает fabrics.courier_info_full со всеми параметрами
+
+    Parameters:
+    argument1 (int): ID курьера
+
+    Returns:
+    response_models.FullCourierInfo: объект готовый к отправке клиенту
+
+    """
     courier_obj, regions_objs, hours_objs = db.courier_data(courier_id)
+
     rating = calculate_rating(courier_id)
     earnings = calculate_earnings(courier_id)
 
@@ -228,6 +333,19 @@ def courier_info_full(courier_id):
 
 
 def calculate_earnings(courier_id):
+    """
+    Расчёт заработка
+
+    Находит валидные закрытые доставки, считает заработок на основе
+    информации о типе курьера на момент создания доставки
+
+    Parameters:
+    argument1 (int): ID курьера
+
+    Returns:
+    int: Заработок
+
+    """
     earnings = 0
 
     complete_deliveries = db.find_complete_deliveries(courier_id)
@@ -245,6 +363,21 @@ def calculate_earnings(courier_id):
 
 
 def calculate_rating(courier_id):
+    """
+    Расчёт рейтинга
+
+    Находит валидные закрытые доставки, считает время выполнения заказов из них,
+    формируя листы с длительностю для каждого региона, считает рейтинг
+
+    Parameters:
+    argument1 (int): ID курьера
+
+    Returns:
+    float: рейтинг
+    OR
+    None: расёт рейтинга невозможен
+
+    """
     complete_deliveries = db.find_complete_deliveries(courier_id)
 
     if complete_deliveries:

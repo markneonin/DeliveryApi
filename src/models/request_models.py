@@ -1,8 +1,9 @@
 from pydantic import BaseModel, validator, root_validator
 from enum import Enum
 from typing import List, Optional, Any
-import services.checkers as ch
+import re
 
+import services.checkers as ch
 
 
 class CourierType(Enum):
@@ -15,31 +16,35 @@ class Courier(BaseModel):
     class Config:
         extra = 'forbid'
 
-    courier_id: Any = ...  # Не смотря на использование педантика, из-за жестких ограничений по валидации входных
-    # данных по типам, принимаем многие поля как Any и валидируем лапками
+    """""
+    Не смотря на использование педантика, из-за жестких ограничений по валидации входных
+    данных по типам, принимаем многие поля как Any и валидируем лапками
+    """""
+
+    courier_id: Any = ...
     courier_type: CourierType
     regions: List[Any]
     working_hours: List[str]
 
     @validator('courier_id')
     def check_courier_id(cls, v):
-        result = ch.courier_id_checker(v)
-        if not result[0]:
-            raise ValueError(result[1])
+        result, message = ch.courier_id_checker(v)
+        if not result:
+            raise ValueError(message)
         return v
 
     @validator('regions')
     def check_regions(cls, v):
-        result = ch.regions_checker(v)
-        if not result[0]:
-            raise ValueError(result[1])
+        result, message = ch.regions_checker(v)
+        if not result:
+            raise ValueError(message)
         return v
 
-    @validator('working_hours')
+    @validator('working_hours')  # Не использую рут валидатор, чтобы была корректная информация о локации ошибок
     def check_working_hours(cls, v):
-        result = ch.times_checker(v)
-        if not result[0]:
-            raise ValueError(result[1])
+        result, message = ch.times_checker(v)
+        if not result:
+            raise ValueError(message)
         return v
 
 
@@ -48,7 +53,6 @@ class CouriersData(BaseModel):
         extra = 'forbid'
 
     data: List[Any]
-
 
 
 class DataToPatch(BaseModel):
@@ -61,35 +65,35 @@ class DataToPatch(BaseModel):
 
     @validator('courier_type')
     def check_type(cls, v):
-        if v == None:
+        if v is None:
             raise ValueError('invalid courier type it can not be None')
         return v
 
     @validator('regions')
     def check_regions(cls, v):
-        if v == None:
-            raise ValueError('invalid regions list it can not be None')
+        if v is None:
+            raise ValueError('invalid regions it can not be None')
         else:
-            result = ch.regions_checker(v)
-            if not result[0]:
-                raise ValueError(result[1])
+            result, message = ch.regions_checker(v)
+            if not result:
+                raise ValueError(message)
         return v
 
     @validator('working_hours')
     def check_hours(cls, v):
-        if v == None:
+        if v is None:
             raise ValueError
         else:
-            result = ch.times_checker(v)
-            if not result[0]:
-                raise ValueError(result[1])
+            result, message = ch.times_checker(v)
+            if not result:
+                raise ValueError(message)
         return v
 
-    @root_validator
+    @root_validator  # по скольку все поля Optional, вводим дополнительную проверку рут валидатором
     def is_empty(cls, values):
         counter = 0
         for value in values.values():
-            if value == None:
+            if value is None:
                 counter += 1
         if counter == 3:
             raise ValueError('empty data')
@@ -107,29 +111,29 @@ class Order(BaseModel):
 
     @validator('order_id')
     def check_order_id(cls, v):
-        result = ch.order_id_checker(v)
-        if not result[0]:
-            raise ValueError(result[1])
+        result, message = ch.order_id_checker(v)
+        if not result:
+            raise ValueError(message)
         return v
 
     @validator('region')
     def check_region(cls, v):
-        if not isinstance(v, int) or v < 1 or v > 10**18:
-            raise ValueError('region value must be positive integer')
+        if not isinstance(v, int) or v < 1 or v > 10 ** 18:
+            raise ValueError('region value must be positive integer less than 10^18')
         return v
 
     @validator('weight')
     def check_weight(cls, v):
-        result = ch.weight_checker(v)
-        if not result[0]:
-            raise ValueError(result[1])
+        result, message = ch.weight_checker(v)
+        if not result:
+            raise ValueError(message)
         return v
 
     @validator('delivery_hours')
     def check_delivery_hours(cls, v):
-        result = ch.times_checker(v)
-        if not result[0]:
-            raise ValueError(result[1])
+        result, message = ch.times_checker(v)
+        if not result:
+            raise ValueError(message)
         return v
 
 
@@ -148,9 +152,9 @@ class AssignData(BaseModel):
 
     @validator('courier_id')
     def check_courier_id(cls, v):
-        result = ch.courier_id_checker(v)
-        if result[0] != False:
-            raise ValueError(result[1])
+        result, message = ch.courier_id_checker(v)
+        if result != False:
+            raise ValueError(message)
         return v
 
 
@@ -164,25 +168,25 @@ class CompleteOrder(BaseModel):
 
     @validator('courier_id')
     def cour_id(cls, v):
-        result = ch.courier_id_checker(v)
-        if result[0] == False:
+        result, message = ch.courier_id_checker(v)
+        if result == False:  # чекер возвращает три флага (True, False, None), нас устроит только False
             return v
         else:
-            raise ValueError(result[1])
+            raise ValueError(message)
 
     @validator('order_id')
     def order(cls, v):
-        result = ch.order_id_checker(v)
-        if result[0] == False:
+        result, message = ch.order_id_checker(v)
+        if result == False:
             return v
         else:
-            raise ValueError(result[1])
-
+            raise ValueError(message)
 
     @validator('complete_time')
     def complete(cls, v):
-        result = ch.complete_time_checker(v)
-        if not result[0]:
-            raise ValueError(result[1])
-        return v
-
+        result, message = ch.complete_time_checker(v)
+        if not result:
+            raise ValueError(message)
+        else:
+            new_time = re.sub(r'[—–-]', '-', v)  # на всякий случай
+        return new_time

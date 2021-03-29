@@ -63,7 +63,7 @@ def is_courier_exist(courier_id):
     if courier:
         return True, courier
     else:
-        return False,
+        return False, None
 
 
 def is_order_exist(order_id):
@@ -73,7 +73,7 @@ def is_order_exist(order_id):
     if order:
         return True, order
     else:
-        return False,
+        return False, None
 
 
 def find_active_delivery(courier_id):
@@ -122,16 +122,16 @@ def find_valid_orders(courier_id):
         sub_query_2.exists()).filter(
         sub_query_3.exists()).filter(
         sub_query_4.exists()).filter(
-        tables.Orders.status == order_status).filter(   # ищем доступные заказы
+        tables.Orders.status == order_status).filter(  # ищем доступные заказы
         tables.CourierRegion.courier_id == courier_id).filter(  # у которых регион равен региону
-        tables.CourierRegion.region == tables.Orders.region).filter(    # одной из записей регионов курьера
+        tables.CourierRegion.region == tables.Orders.region).filter(  # одной из записей регионов курьера
         tables.Courier.courier_id == courier_id).filter(
-        tables.Courier.cargo >= tables.Orders.weight).filter(   # вес которых не превышает грузоподъемность курьера
+        tables.Courier.cargo >= tables.Orders.weight).filter(  # вес которых не превышает грузоподъемность курьера
         tables.DeliveryHours.order_id == tables.Orders.order_id).filter(
         tables.WorkingHours.courier_id == courier_id).filter(
         or_(between(tables.WorkingHours.stop, tables.DeliveryHours.start, tables.DeliveryHours.stop),
             between(tables.DeliveryHours.stop, tables.WorkingHours.start, tables.WorkingHours.stop))).all()
-                                                    # у которых время доставки пересекается с рабочим временем курьера
+    # у которых время доставки пересекается с рабочим временем курьера
 
     session.close()
 
@@ -327,12 +327,12 @@ def find_assign_time(courier_id, order_id):
         tables.Assigning.order_id == order_id).filter(
         tables.Assigning.status == assign_status).filter(
         tables.Orders.status == order_status).filter(
-        tables.Orders.order_id == order_id).all()
+        tables.Orders.order_id == order_id).first()
 
     session.close()
 
     if delivery:
-        return delivery[0]
+        return delivery
     else:
         return None
 

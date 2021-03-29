@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Response, status
 
-import services.checkers as ch
-import database.dbworking as db
+from database import dbworking as db
+from services import checkers as ch
 from services import utils
 
 
@@ -11,41 +11,40 @@ router = APIRouter(
 
 
 @router.post('', status_code=201)
-def create_couriers(data: dict, response: Response):
+def create_orders(data: dict, response: Response):
 
-    result = ch.orders_validation(data)
+    result, output, orders_objects = ch.orders_validation(data)
 
-    if result[0]:
-        db.create_orders(result[2])
-        return result[1]
-
+    if result:
+        db.create_orders(orders_objects)
+        return output
     else:
         response.status_code = status.HTTP_400_BAD_REQUEST
-        return result[1]
+        return output
 
 
 @router.post('/assign', status_code=200)
 def assign_orders(data: dict, response: Response):
 
-    result = ch.assign_checker(data)
+    result, courier_id, output = ch.assign_checker(data)
 
-    if result[0]:
-        assign_data = utils.assign(result[1])
+    if result:
+        assign_data = utils.assign(courier_id)
         return assign_data
     else:
         response.status_code = status.HTTP_400_BAD_REQUEST
-        return result[1]
+        return output
 
 
 @router.post('/complete', status_code=200)
 def complete_order(data: dict, response: Response):
 
-    result = ch.complete_checker(data)
+    result, complete_data, delivery, output = ch.complete_checker(data)
 
-    if result[0]:
-        out = utils.complete_order(result[1], result[2])
-        return out
+    if result:
+        comp_data = utils.complete_order(complete_data, delivery)
+        return comp_data
 
     else:
         response.status_code = status.HTTP_400_BAD_REQUEST
-        return result[1]
+        return output
